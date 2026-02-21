@@ -17,6 +17,16 @@ A low-level implementation that talks directly to any PKCS#11 compliant HSM or l
 *   **Local Testing**: Used with **SoftHSM2** for development without requiring a network-connected Vault.
 *   **Performance**: Direct hardware communication without the network overhead of a middleware API.
 
+## Supported Algorithms
+
+VigilHSM standardizes the following algorithms across its backends:
+
+| Algorithm | Key Type | Vault Support | PKCS#11 Support |
+| :--- | :--- | :--- | :--- |
+| `rsa` | RSA 2048-bit | ✅ | ✅ |
+| `ecdsa` | ECDSA (prime256v1) | ✅ | ✅ |
+| `ed25519` | Ed25519 | ✅ | ⚠️ (SoftHSM2/Graphene compatibility) |
+
 ---
 
 ## Getting Started
@@ -51,19 +61,23 @@ Individual operations can be performed using the provided CLI scripts. Each scri
 
 ### Generate Key Pair
 ```bash
-npx ts-node src/generate-key.ts <label> [vault|softhsm]
+npx ts-node src/generate-key.ts <label> [vault|softhsm] [rsa|ecdsa|ed25519]
 ```
+Example: `npx ts-node src/generate-key.ts my-key vault ecdsa`
 
 ### Sign Data
 Accepts base64 encoded data to sign.
 ```bash
-npx ts-node src/sign.ts <label> <base64-data> [vault|softhsm]
+npx ts-node src/sign.ts <label> <base64-data> [vault|softhsm] [rsa|ecdsa|ed25519]
 ```
+Example: `npx ts-node src/sign.ts my-key SGVsbG8gVmF1bHQh softhsm rsa`
 
 ### Verify Signature
+Accepts base64 encoded data and the signature returned from the sign step.
 ```bash
-npx ts-node src/verify.ts <label> <base64-data> <signature> [vault|softhsm]
+npx ts-node src/verify.ts <label> <base64-data> <signature> [vault|softhsm] [rsa|ecdsa|ed25519]
 ```
+Example: `npx ts-node src/verify.ts my-key SGVsbG8gVmF1bHQh <signature> vault ecdsa`
 
 ---
 
@@ -73,7 +87,7 @@ npx ts-node src/verify.ts <label> <base64-data> <signature> [vault|softhsm]
 **A**: Vault provides a high-level REST API and handles complexity like key rotation, backup, and enterprise-grade access control. It acts as a "Single Source of Truth" for security, whereas PKCS#11 is a low-level protocol often tied to specific hardware drivers.
 
 **Q: Why does the PKCS#11 implementation use RSA while Vault uses Ed25519?**
-**A**: While `IVigilHSM` supports both, the `graphene-pk11` library (used for PKCS#11) has limited native support for EdDSA constants in some environments. RSA provides the most reliable "out-of-the-box" compatibility for local SoftHSM2 testing while still proving the common interface works across different algorithms.
+**A**: While `IVigilHSM` supports both, the `graphene-pk11` library (used for PKCS#11) has limited native support for EdDSA constants in some environments. RSA and ECDSA provide the most reliable "out-of-the-box" compatibility for local SoftHSM2 testing while still proving the common interface works across different algorithms.
 
 **Q: I get "Signature is INVALID" when verifying Vault signatures manually. Why?**
 **A**: Vault Transit signatures are prefixed (e.g., `vault:v1:base64...`). If you copy only the base64 part, the verification will fail because Vault uses that prefix to identify the key version and algorithm used for the signature. Always include the full string.

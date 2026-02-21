@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { IVigilHSM } from './IVigilHSM';
+import { IVigilHSM, KeyAlgorithm } from './IVigilHSM';
 
 export interface PKCS11Config {
     libraryPath: string;
@@ -150,8 +150,54 @@ export class VigilHSMPKCS11 implements IVigilHSM {
     /**
      * Generate an Ed25519 key pair
      */
-    public async generateKeyPair(keyLabel: string): Promise<{ publicKey: string; keyId: string }> {
-        return this.generateRSAKeyPair(keyLabel);
+    public async generateKeyPair(keyLabel: string, algorithm: KeyAlgorithm = 'rsa'): Promise<{ publicKey: string; keyId: string }> {
+        switch (algorithm) {
+            case 'rsa':
+                return this.generateRSAKeyPair(keyLabel);
+            case 'ecdsa':
+                return this.generateECDSAKeyPair(keyLabel);
+            default:
+                throw new Error(`Unsupported algorithm: ${algorithm}`);
+        }
+    }
+
+    private async generateECDSAKeyPair(keyLabel: string): Promise<{ publicKey: string; keyId: string }> {
+        await this.initialize();
+
+        const graphene = require('graphene-pk11');
+        const keyId = Buffer.from(Date.now().toString()).toString('hex');
+
+        const keys = this.session.generateKeyPair(
+            graphene.KeyGenMechanism.EC,
+            {
+                class: graphene.ObjectClass.PUBLIC_KEY,
+                keyType: graphene.KeyType.EC,
+                token: true,
+                label: keyLabel,
+                id: Buffer.from(keyId, 'hex'),
+                verify: true,
+                paramsECDSA: graphene.NamedCurve.getByName('prime256v1').value
+            },
+            {
+                class: graphene.ObjectClass.PRIVATE_KEY,
+                keyType: graphene.KeyType.EC,
+                token: true,
+                label: keyLabel,
+                id: Buffer.from(keyId, 'hex'),
+                sign: true,
+                private: true,
+                sensitive: true,
+                extractable: false
+            }
+        );
+
+        const pubKeyValue = keys.publicKey.getAttribute({ pointEC: null }).pointEC;
+        const publicKeyHex = pubKeyValue.toString('hex');
+
+        return {
+            publicKey: publicKeyHex,
+            keyId
+        };
     }
 
     /**
@@ -274,8 +320,26 @@ export class VigilHSMPKCS11 implements IVigilHSM {
     /**
      * Sign a payload using Ed25519
      */
-    public async sign(keyLabel: string, payload: string): Promise<string> {
+    public async sign(keyLabel: string, payload: string, algorithm?: KeyAlgorithm): Promise<string> {
+        // If algorithm is not provided, we should ideally detect it from the key.
+        // For simplicity, we'll try to find the key and check its type, 
+        // or just let the caller specify.
+        if (algorithm === 'ecdsa') {
+            return this.signECDSA(keyLabel, payload);
+        }
         return this.signRSA(keyLabel, payload);
+    }
+
+    private async signECDSA(keyLabel: string, payload: string): Promise<string> {
+        await this.initialize();
+
+        const privateKey = this.findPrivateKey(keyLabel);
+        const mechanism = { name: 'ECDSA' };
+
+        const signature = this.session.createSign(mechanism, privateKey)
+            .once(Buffer.from(payload));
+
+        return signature.toString('hex');
     }
 
     /**
@@ -296,8 +360,28 @@ export class VigilHSMPKCS11 implements IVigilHSM {
     /**
      * Verify an Ed25519 signature
      */
-    public async verify(keyLabel: string, payload: string, signature: string): Promise<boolean> {
+    public async verify(keyLabel: string, payload: string, signature: string, algorithm?: KeyAlgorithm): Promise<boolean> {
+        if (algorithm === 'ecdsa') {
+            return this.verifyECDSA(keyLabel, payload, signature);
+        }
         return this.verifyRSA(keyLabel, payload, signature);
+    }
+
+    private async verifyECDSA(keyLabel: string, payload: string, signature: string): Promise<boolean> {
+        await this.initialize();
+
+        const publicKey = this.findPublicKey(keyLabel);
+
+        try {
+            const mechanism = { name: 'ECDSA' };
+
+            const isValid = this.session.createVerify(mechanism, publicKey)
+                .once(Buffer.from(payload), Buffer.from(signature, 'hex'));
+
+            return isValid;
+        } catch {
+            return false;
+        }
     }
 
     /**

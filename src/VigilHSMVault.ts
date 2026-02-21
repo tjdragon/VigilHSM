@@ -1,5 +1,5 @@
 import NodeVault from 'node-vault';
-import { IVigilHSM } from './IVigilHSM';
+import { IVigilHSM, KeyAlgorithm } from './IVigilHSM';
 
 export interface VaultConfig {
     endpoint: string;
@@ -42,13 +42,28 @@ export class VigilHSMVault implements IVigilHSM {
         return this.initialized;
     }
 
-    public async generateKeyPair(keyLabel: string): Promise<{ publicKey: string; keyId: string }> {
+    public async generateKeyPair(keyLabel: string, algorithm: KeyAlgorithm = 'ed25519'): Promise<{ publicKey: string; keyId: string }> {
         await this.initialize();
 
+        let vaultType: string;
+        switch (algorithm) {
+            case 'rsa':
+                vaultType = 'rsa-2048';
+                break;
+            case 'ecdsa':
+                vaultType = 'ecdsa-p256';
+                break;
+            case 'ed25519':
+                vaultType = 'ed25519';
+                break;
+            default:
+                throw new Error(`Unsupported algorithm: ${algorithm}`);
+        }
+
         try {
-            // Create a named key in Vault Transit engine using ed25519
+            // Create a named key in Vault Transit engine
             await this.vault.write(`transit/keys/${keyLabel}`, {
-                type: 'ed25519',
+                type: vaultType,
                 exportable: true // Allows us to retrieve the public key
             });
 
@@ -62,6 +77,8 @@ export class VigilHSMVault implements IVigilHSM {
             const pubKey = keys[latestVersion].public_key;
 
             // Convert PEM/Base64 to hex to match PKCS#11 behavior format if needed
+            // For RSA/ECDSA, Vault returns PEM strings. 
+            // We'll keep it as simple hex for consistent interface if possible, or just return the raw string.
             const publicKeyHex = Buffer.from(pubKey).toString('hex');
 
             return {
@@ -73,7 +90,7 @@ export class VigilHSMVault implements IVigilHSM {
         }
     }
 
-    public async sign(keyLabel: string, payload: string): Promise<string> {
+    public async sign(keyLabel: string, payload: string, _algorithm?: KeyAlgorithm): Promise<string> {
         await this.initialize();
 
         // Vault Transit requires base64 encoded input
@@ -91,7 +108,7 @@ export class VigilHSMVault implements IVigilHSM {
         }
     }
 
-    public async verify(keyLabel: string, payload: string, signature: string): Promise<boolean> {
+    public async verify(keyLabel: string, payload: string, signature: string, _algorithm?: KeyAlgorithm): Promise<boolean> {
         await this.initialize();
 
         const base64Payload = Buffer.from(payload).toString('base64');
