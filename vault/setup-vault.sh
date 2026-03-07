@@ -13,4 +13,4 @@ docker compose exec -e VAULT_ADDR='http://127.0.0.1:8200' -e VAULT_TOKEN='dev-to
 echo "HashiCorp Vault Transit engine has been enabled!"
 echo "Vault is ready to process HSM operations."
 
-npx ts-node src/generate-key.ts VIGIL_BACKEND vault
+# npx ts-node src/generate-key.ts VIGIL_BACKEND vault
