@@ -106,24 +106,15 @@ echo "TXkgRGF0YQ==" | base64 --decode
 ## Local test
 
 ```bash
-tj@dragon:~/Code/VigilHSM$ npx ts-node src/generate-key.ts TJ vault
-Generating key pair with label: TJ on vault...
+# 1. Generate Key (Now persistent!)
+npx ts-node src/generate-key.ts TJ vault rsa
 
-✅ Key Generation Successful
-Label: TJ
-Key ID: 31373731363731303136313230
-Public Key (hex): 4d2f47396c4c414458457947686b4f6c684c4738306d6c333865694e6b777843453876364a6f345931456b3d
-tj@dragon:~/Code/VigilHSM$ npx ts-node src/sign.ts TJ SGVsbG8K vault
-Signing data with key label: TJ on vault...
+# 2. Sign Data (Auto-loads token from vault/vault_init.env)
+npx ts-node src/sign.ts TJ SGVsbG8K vault rsa
 
-✅ Signing Successful
-Signature: vault:v1:V2NTba6IANa26PNElWwdV0s62wjtOST2qawci8685zAWID4PR67m6daCz9jkTPeGCO6qK+c/Mt73ENJvMyceAg==
-tj@dragon:~/Code/VigilHSM$ npx ts-node src/verify.ts TJ SGVsbG8K V2NTba6IANa26PNElWwdV0s62wjtOST2qawci8685zAWID4PR67m6daCz9jkTPeGCO6qK+c/Mt73ENJvMyceAg== vault
-Verifying signature for key label: TJ on vault...
-
-❌ Signature is INVALID
-tj@dragon:~/Code/VigilHSM$ npx ts-node src/verify.ts TJ SGVsbG8K vault:v1:V2NTba6IANa26PNElWwdV0s62wjtOST2qawci8685zAWID4PR67m6daCz9jkTPeGCO6qK+c/Mt73ENJvMyceAg== vault
-Verifying signature for key label: TJ on vault...
-
-✅ Signature is VALID
+# 3. Verify Signature (Ensure full 'vault:v1:...' prefix is included)
+npx ts-node src/verify.ts TJ SGVsbG8K <signature> vault rsa
 ```
+
+> [!TIP]
+> Vault signatures are prefixed with `vault:v1:`. If you copy only the base64 part, verification will fail. Always use the full string returned by the sign script.

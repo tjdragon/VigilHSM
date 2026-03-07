@@ -8,7 +8,9 @@ dist/
 tokens/
 
 # Environment variables
-.env
+# Vault data and credentials
+vault/data/
+vault/*.env
 
 # OS files
 .DS_Store

@@ -1,6 +1,11 @@
 import { VigilHSMVault } from './VigilHSMVault';
 import { VigilHSMPKCS11 } from './VigilHSMPKCS11';
 import { IVigilHSM } from './IVigilHSM';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load Vault credentials from the vault directory if they exist
+dotenv.config({ path: path.resolve(__dirname, '../vault/vault_init.env') });
 
 export function getHSM(type: 'vault' | 'softhsm' = 'vault'): IVigilHSM {
     if (type === 'softhsm') {
@@ -18,7 +23,7 @@ export function getHSM(type: 'vault' | 'softhsm' = 'vault'): IVigilHSM {
     }
 
     return new VigilHSMVault({
-        endpoint: 'http://127.0.0.1:8200',
-        token: 'dev-token'
+        endpoint: process.env.VAULT_ADDR || 'http://127.0.0.1:8200',
+        token: process.env.VAULT_TOKEN || process.env.ROOT_TOKEN || 'dev-token'
     });
 }
